@@ -351,14 +351,14 @@ def compress_missing(missing_indices):
     ranges = []
     start = previous = int(missing_indices[0])
     for value in missing_indices[1:]:
-        value = int(value)
-        if value == previous + 1:
-            previous = value
-            continue
+        值 = 整数(值)
+        如果值 == 上一个 + 1:
+            上一个 = 值
+            继续
         ranges.append(
             f"{start}-{previous}" if start != previous else str(start)
         )
-        start = previous = value
+        开始 = 上一个 = 值
     ranges.append(
         f"{start}-{previous}" if start != previous else str(start)
     )
@@ -367,65 +367,36 @@ def compress_missing(missing_indices):
 
 def classify_loss_position(missing_indices, total_packets):
     if len(missing_indices) == 0:
-        return "NONE"
+        返回 "无"
     ranges = compress_missing(missing_indices).split(";")
     if len(ranges) > 1:
-        return "SCATTERED"
-    first = int(missing_indices[0])
-    last = int(missing_indices[-1])
+        返回 "分散的"
+    第一个 = int(缺失索引[0])
+    最后一个 = int(缺失索引[-1])
     if first == 0:
-        return "HEAD"
-    if last == total_packets - 1:
-        return "TAIL"
-    return "MIDDLE"
+        返回 "头部"
+    如果最后 == 总数据包数 - 1:
+        返回 "尾部"
+    返回 "中部"
 
-
-class CaptureBuffer:
-    def __init__(self, config):
-        self.config = config
-        self.data = np.empty(config.total_points, dtype="<i2")
-        self.received = np.zeros(config.total_packets, dtype=np.bool_)
-        self.reset(None, 0)
-
-    def reset(self, ts_info, capture_index):
-        self.received.fill(False)
-        self.ts_info = ts_info
-        self.capture_index = capture_index
-        self.received_count = 0
-        self.duplicate_count = 0
-        self.bad_count = 0
-        self.sec_idx_set = set()
-        self.receive_start_monotonic = time.monotonic()
-        self.receive_start_time = datetime.now()
-        self.receive_end_monotonic = None
-        self.receive_end_time = None
-        self.end_reason = None
-        self.missing_indices = np.empty(0, dtype=np.int64)
-        self.missing_ranges = ""
-        self.loss_position = "NONE"
-        self.minimum = None
-        self.maximum = None
-        self.mean = None
-        self.queue_depth_at_submit = 0
-
-    @property
-    def missing_packets(self):
+    @属性
+    def丢失的数据包(self):
         return self.config.total_packets - self.received_count
 
-    @property
-    def receive_duration_s(self):
-        if self.receive_end_monotonic is None:
-            return None
+    @属性
+    def 接收时长（秒）(self):
+        如果 self.receive_end_monotonic 为 None:
+            返回 None
         return self.receive_end_monotonic - self.receive_start_monotonic
 
-    def add_adc_packet(self, packet):
+    def 添加ADC数据包(self, packet):
         pkt_idx = (packet[4] << 8) | packet[5]
         if pkt_idx >= self.config.total_packets:
             self.bad_count += 1
-            return False
+            返回 False
         if self.received[pkt_idx]:
             self.duplicate_count += 1
-            return False
+            返回 False
 
         self.received[pkt_idx] = True
         self.received_count += 1
@@ -442,7 +413,7 @@ class CaptureBuffer:
             offset=ADC_HEADER_SIZE,
         )
         self.data[start:end] = values[: end - start]
-        return True
+        return 真
 
     def close(self, reason):
         self.end_reason = reason
@@ -689,60 +660,7 @@ class ManifestCaptureWriter:
             suffix += 1
         return candidate, capture_dir / f"{candidate}.bin"
 
-    def write(self, capture):
-        dt, timestamp_source = self._parse_fpga_time(capture.ts_info)
-        base_name, data_path = self._base_name(capture, dt, timestamp_source)
-
-        save_start = time.monotonic()
-        atomic_write_int16(data_path, capture.data)
-        data_save_duration = time.monotonic() - save_start
-
-        ts = capture.ts_info or {}
-        row = {
-            "event_type": self.event_type,
-            "data_file": str(data_path),
-            "capture_index": capture.capture_index,
-            "base_name": base_name,
-            "timestamp_source": timestamp_source,
-            "system_save_time": datetime.now().strftime("%Y%m%d_%H%M%S"),
-            "fpga_time": ts.get("fpga_time") or "",
-            "work_mode": ts.get("work_mode") or "",
-            "work_mode_text": ts.get("work_mode_text") or "",
-            "gps_lock": ts.get("gps_lock") if ts.get("gps_lock") is not None else "",
-            "gps_lock_text": ts.get("gps_lock_text") or "",
-            "current_threshold": self._current_threshold(),
-            "points": self.config.total_points,
-            "sample_rate": self.config.sample_rate,
-            "duration_sec": self.config.capture_seconds,
-            "minimum": capture.minimum,
-            "maximum": capture.maximum,
-            "mean": f"{capture.mean:.2f}",
-            "packets_received": capture.received_count,
-            "total_packets": self.config.total_packets,
-            "missing_packets": capture.missing_packets,
-            "missing_ranges": capture.missing_ranges,
-            "loss_position": capture.loss_position,
-            "sec_idx_set": sorted(capture.sec_idx_set),
-            "sec_idx_consistent": len(capture.sec_idx_set) <= 1,
-            "duplicate_packets": capture.duplicate_count,
-            "bad_packets": capture.bad_count,
-            "segment_end_reason": capture.end_reason,
-            "receive_start_time": (
-                f"{capture.receive_start_time:%Y-%m-%d %H:%M:%S.%f}"
-            ),
-            "receive_end_time": (
-                f"{capture.receive_end_time:%Y-%m-%d %H:%M:%S.%f}"
-            ),
-            "receive_duration_sec": f"{capture.receive_duration_s:.6f}",
-            "data_save_duration_sec": f"{data_save_duration:.6f}",
-            "queue_depth_at_submit": capture.queue_depth_at_submit,
-        }
-        row.update(self._timestamp_manifest_fields(ts))
-        self._append_manifest_row(dt, row)
-        self.last_data_path = data_path
-        if self.event_type == "trigger" and self.on_trigger_saved is not None:
-            self.on_trigger_saved(capture)
-        return data_path
+   
 
     def log_calibration_event(
         self,
@@ -885,58 +803,7 @@ class ContinuousCaptureEngine:
             self.stats.captures_with_loss += 1
         self._save_queue.put_nowait(capture)
 
-    def process_datagram(self, packet):
-        packet_length = len(packet)
-        self.stats.datagrams_received += 1
-
-        if (
-            packet_length >= 3
-            and packet[0] == SYNC0
-            and packet[1] == SYNC1
-            and packet[2] == PKT_TYPE_TIMESTAMP
-        ):
-            if packet_length not in TIMESTAMP_PACKET_SIZES:
-                self.stats.bad_packets += 1
-                return
-            ts_info = parse_timestamp_packet(packet)
-            if ts_info is None:
-                self.stats.bad_packets += 1
-                return
-            self.stats.timestamp_packets_received += 1
-            self.last_timestamp_info = ts_info
-            if self.live_feedback:
-                self._print_timestamp_feedback(ts_info)
-            self._submit_active("NEXT_TIMESTAMP")
-            self._acquire_buffer(ts_info)
-            return
-
-        if (
-            packet_length == self.config.adc_packet_size
-            and packet[0] == SYNC0
-            and packet[1] == SYNC1
-            and packet[2] == PKT_TYPE_ADC
-        ):
-            if self._active is None:
-                self.stats.orphan_adc_packets += 1
-                return
-            before_duplicates = self._active.duplicate_count
-            before_bad = self._active.bad_count
-            accepted = self._active.add_adc_packet(packet)
-            self.stats.duplicate_packets += (
-                self._active.duplicate_count - before_duplicates
-            )
-            self.stats.bad_packets += self._active.bad_count - before_bad
-            if accepted:
-                self.stats.adc_packets_received += 1
-            if self._active.received_count >= self.config.total_packets:
-                self._submit_active("COMPLETE")
-            return
-
-        if packet_length == LEGACY_PACKET_SIZE:
-            self.stats.legacy_packets += 1
-        else:
-            self.stats.bad_packets += 1
-
+    
     @staticmethod
     def _print_timestamp_feedback(ts_info):
         fpga_time = ts_info.get("fpga_time") or "NO_TIMESTAMP"
@@ -1080,129 +947,7 @@ class FPGAHostV6:
             socket.SO_RCVBUF,
         )
 
-        ensure_runtime_directories(self.project_root)
-        if site_file_created:
-            print(
-                "[WARN] site_name.txt was created with default site code XXX"
-            )
-        print("=" * 60)
-        print("FPGA ADC Host v6 - standalone adaptive capture with temperature")
-        print("=" * 60)
-        print(f"PC: {PC_IP}:{PC_PORT}")
-        print(f"FPGA: {FPGA_IP}:{FPGA_PORT}")
-        print(f"Project root: {self.project_root}")
-        print(f"Site code: {self.site_code}")
-        print(f"Trigger files: {self.project_root / DATA_DIR_NAME / 'YYYYMMDD'}")
-        print(f"Sheet files: {self.project_root / SHEET_DIR_NAME / 'YYYYMMDD'}")
-        print(f"Test files: {self.project_root / TEST_DIR_NAME / 'YYYYMMDD'}")
-        print(
-            f"Capture: {SAMPLE_RATE / 1e6:.1f} Msps x "
-            f"{CAPTURE_SECONDS:.1f}s = {TOTAL_POINTS} points"
-        )
-        print(f"Packets per capture: {TOTAL_PACKETS}")
-        print(f"Capture buffers: {DEFAULT_BUFFER_COUNT} x 40 MB")
-        print(
-            "Auto threshold: "
-            f"interval={self.adaptive_interval_hours:g}h, "
-            f"multiplier={self.adaptive_multiplier:g}, "
-            f"safe={self.no_trigger_safe_hours:g}h, "
-            f"clamp<= {THRESHOLD_EFFECTIVE_MAX}"
-        )
-        print(
-            f"SO_RCVBUF requested={REQUESTED_RCVBUF / 1024 / 1024:.1f} MiB, "
-            f"actual={actual_rcvbuf / 1024 / 1024:.2f} MiB"
-        )
-        print("=" * 60)
-
-    def _flush_socket(self):
-        self.sock.setblocking(False)
-        try:
-            while True:
-                self.sock.recvfrom(2048)
-        except BlockingIOError:
-            pass
-        finally:
-            self.sock.setblocking(True)
-            self.sock.settimeout(5.0)
-
-    def send_command(self, command):
-        try:
-            payload = normalize_command_payload(command)
-            self._flush_socket()
-            bytes_sent = self.sock.sendto(payload, (FPGA_IP, FPGA_PORT))
-            print(
-                f"[Send] payload={format_payload_hex(payload)}, "
-                f"bytes={bytes_sent}"
-            )
-            return bytes_sent == len(payload)
-        except OSError as exc:
-            print(f"[Error] send failed: {exc}")
-            return False
-        except (TypeError, ValueError) as exc:
-            print(f"[Error] invalid command: {exc}")
-            return False
-
-    def set_threshold(self, value):
-        try:
-            payload = build_threshold_command(value)
-        except (TypeError, ValueError) as exc:
-            print(f"[Error] invalid threshold {value}: {exc}")
-            return False
-        step = value // THRESHOLD_MULTIPLIER
-        print(
-            f"[Threshold] value={value}, step={step}, "
-            f"payload={format_payload_hex(payload)}"
-        )
-        if value > THRESHOLD_EFFECTIVE_MAX:
-            print(
-                "[WARN] threshold exceeds the effective 16-bit ADC trigger "
-                f"range 0..{THRESHOLD_EFFECTIVE_MAX}"
-            )
-        if self.send_command(payload):
-            self.current_threshold = value
-            return True
-        return False
-
-    @staticmethod
-    def plot_data_array(data, title="FPGA ADC Data"):
-        if not HAS_MATPLOTLIB:
-            print("[Plot] matplotlib not installed, skip plotting")
-            return
-
-        data = np.asarray(data, dtype="<i2")
-        if data.size == 0:
-            print("[Plot] empty data, skip plotting")
-            return
-
-        print(f"[Plot] Drawing waveform: {data.size} points")
-        max_display = 500_000
-        downsample = max(1, data.size // max_display)
-        sample_indices = np.arange(0, data.size, downsample)
-        display_data = data[::downsample]
-
-        plt.figure(figsize=(14, 6))
-        plt.plot(sample_indices, display_data, linewidth=0.5)
-        plt.title(title)
-        plt.xlabel("Sample")
-        plt.ylabel("ADC Value (16-bit signed)")
-        plt.grid(True, alpha=0.3)
-        stats_text = (
-            f"Min: {data.min()}\n"
-            f"Max: {data.max()}\n"
-            f"Mean: {data.mean():.2f}"
-        )
-        plt.text(
-            0.02,
-            0.98,
-            stats_text,
-            transform=plt.gca().transAxes,
-            verticalalignment="top",
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
-        )
-        plt.tight_layout()
-        plt.show()
-        print("[Plot] Done")
-
+  
     @classmethod
     def plot_data_file(cls, data_path):
         if not HAS_MATPLOTLIB:
@@ -1414,154 +1159,6 @@ class FPGAHostV6:
                 print(f"[Auto] calibration failed: {result_note}")
                 return False
 
-            noise_rms = find_noise_rms(
-                snapshot.data,
-                window_size=NOISE_WINDOW_SIZE,
-            )
-            if noise_rms is None:
-                result_note = f"{note}: no valid noise window"
-                print(f"[Auto] calibration failed: {result_note}")
-                return False
-
-            new_threshold = calculate_auto_threshold(
-                noise_rms,
-                self.adaptive_multiplier,
-            )
-            print(
-                f"[Auto] noise_rms={noise_rms:.2f}, "
-                f"multiplier={self.adaptive_multiplier:g}, "
-                f"threshold={new_threshold}"
-            )
-            if not self.set_threshold(new_threshold):
-                result_note = f"{note}: threshold send failed"
-                print(f"[Auto] calibration failed: {result_note}")
-                return False
-
-            result = "OK"
-            print("[Auto] calibration OK")
-            return True
-        finally:
-            self.last_calibration_time = time.time()
-            self._make_manifest_writer().log_calibration_event(
-                timestamp_info=timestamp_info,
-                noise_rms=noise_rms,
-                multiplier=self.adaptive_multiplier,
-                old_threshold=old_threshold,
-                new_threshold=new_threshold,
-                result=result,
-                note=result_note,
-            )
-
-    def _run_auto_capture(self):
-        if not self._perform_calibration("initial"):
-            print("[Auto] initial calibration failed; continue trigger mode")
-
-        if not self.send_command(CMD_TRIGGER_MODE):
-            return
-
-        engine = self._start_trigger_engine()
-        started = time.monotonic()
-        try:
-            while engine.receiver_alive:
-                if engine.fatal_error is not None:
-                    raise engine.fatal_error
-                if self._should_calibrate():
-                    print("[Auto] scheduled calibration window reached")
-                    self._stop_engine_and_print_summary(engine, started)
-                    if not self._perform_calibration("scheduled"):
-                        print("[Auto] calibration failed; resume trigger mode")
-                    if not self.send_command(CMD_TRIGGER_MODE):
-                        return
-                    engine = self._start_trigger_engine()
-                    started = time.monotonic()
-                    continue
-                time.sleep(0.5)
-        except KeyboardInterrupt:
-            print("\n[Stop] user requested stop")
-        except Exception as exc:
-            print(f"\n[Error] auto capture stopped: {exc}")
-        finally:
-            self._stop_engine_and_print_summary(engine, started)
-
-    def show_settings(self):
-        last_trigger = (
-            "never"
-            if self.last_trigger_time is None
-            else datetime.fromtimestamp(self.last_trigger_time).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        )
-        last_calibration = (
-            "never"
-            if self.last_calibration_time is None
-            else datetime.fromtimestamp(self.last_calibration_time).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        )
-        print("\nCurrent V6 settings")
-        print(f"  project_root: {self.project_root}")
-        print(f"  site_code: {self.site_code}")
-        print(f"  trigger_files: {self.project_root / DATA_DIR_NAME / 'YYYYMMDD'}")
-        print(f"  sheet_files: {self.project_root / SHEET_DIR_NAME / 'YYYYMMDD'}")
-        print(f"  test_files: {self.project_root / TEST_DIR_NAME / 'YYYYMMDD'}")
-        print(f"  current_threshold: {self.current_threshold}")
-        print(f"  adaptive_interval_hours: {self.adaptive_interval_hours:g}")
-        print(f"  adaptive_multiplier: {self.adaptive_multiplier:g}")
-        print(f"  no_trigger_safe_hours: {self.no_trigger_safe_hours:g}")
-        print(f"  last_trigger_time: {last_trigger}")
-        print(f"  last_calibration_time: {last_calibration}")
-
-    def confirm_manual_capture(self, command_name):
-        example_name = (
-            self.site_code
-            + datetime.now().strftime("%Y%m%d_%H%M%S_l.bin")
-        )
-        print(
-            "[Site] command={}, code={}, example={}".format(
-                command_name, self.site_code, example_name
-            )
-        )
-        if self.site_code != DEFAULT_SITE_CODE:
-            return True
-        answer = input(
-            "[WARN] site code is XXX; enter y to continue: "
-        )
-        if answer.strip().lower() == "y":
-            return True
-        print("[Site] command cancelled")
-        return False
-
-    def handle_set_command(self, command):
-        parts = command.split()
-        if len(parts) != 3:
-            print("Usage: set interval HOURS | set multi X | set safe HOURS")
-            return
-        field = parts[1]
-        try:
-            value = float(parts[2])
-        except ValueError:
-            print("Usage: set interval HOURS | set multi X | set safe HOURS")
-            return
-
-        if field in ("interval", "int"):
-            if value <= 0:
-                print("[Error] interval must be > 0 hours")
-                return
-            self.adaptive_interval_hours = value
-        elif field in ("multi", "multiplier", "mul"):
-            if value <= 0:
-                print("[Error] multiplier must be > 0")
-                return
-            self.adaptive_multiplier = value
-        elif field == "safe":
-            if value < 0:
-                print("[Error] safe hours must be >= 0")
-                return
-            self.no_trigger_safe_hours = value
-        else:
-            print("Usage: set interval HOURS | set multi X | set safe HOURS")
-            return
-        self.show_settings()
 
     @staticmethod
     def show_help():
