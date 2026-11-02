@@ -498,114 +498,6 @@ class InMemoryCaptureWriter:
         self.last_capture = snapshot
         self.captures.append(snapshot)
         return snapshot
-
-
-MANIFEST_FIELDS = [
-    "event_type",
-    "data_file",
-    "capture_index",
-    "base_name",
-    "timestamp_source",
-    "system_save_time",
-    "fpga_time",
-    "work_mode",
-    "work_mode_text",
-    "gps_lock",
-    "gps_lock_text",
-    "timestamp_packet_size",
-    "timestamp_encoding",
-    "protocol_ext_version",
-    "temperature_valid",
-    "temperature_c",
-    "temp_raw",
-    "temp_raw12",
-    "temp_flags",
-    "temp_stale",
-    "temp_alarm",
-    "current_threshold",
-    "points",
-    "sample_rate",
-    "duration_sec",
-    "minimum",
-    "maximum",
-    "mean",
-    "packets_received",
-    "total_packets",
-    "missing_packets",
-    "missing_ranges",
-    "loss_position",
-    "sec_idx_set",
-    "sec_idx_consistent",
-    "duplicate_packets",
-    "bad_packets",
-    "segment_end_reason",
-    "receive_start_time",
-    "receive_end_time",
-    "receive_duration_sec",
-    "data_save_duration_sec",
-    "queue_depth_at_submit",
-    "noise_rms",
-    "multiplier",
-    "raw_threshold",
-    "old_threshold",
-    "new_threshold",
-    "calibration_result",
-    "calibration_note",
-]
-
-
-class ManifestCaptureWriter:
-    def __init__(
-        self,
-        root_dir,
-        config,
-        event_type="trigger",
-        current_threshold_getter=None,
-        on_trigger_saved=None,
-        site_code=DEFAULT_SITE_CODE,
-    ):
-        if event_type not in ("trigger", "test"):
-            raise ValueError("event_type must be 'trigger' or 'test'")
-        if re.fullmatch(r"[A-Z]{3}", site_code or "") is None:
-            raise ValueError("site_code must be three uppercase letters")
-        self.root_dir = Path(root_dir)
-        self.config = config
-        self.event_type = event_type
-        self.site_code = site_code
-        self.current_threshold_getter = current_threshold_getter or (lambda: "")
-        self.on_trigger_saved = on_trigger_saved
-        self.last_data_path = None
-        ensure_runtime_directories(self.root_dir)
-
-    @staticmethod
-    def _parse_fpga_time(ts_info):
-        fpga_time = (ts_info or {}).get("fpga_time")
-        try:
-            return datetime.strptime(fpga_time, "%Y-%m-%d %H:%M:%S"), "FPGA"
-        except (TypeError, ValueError):
-            return datetime.now(), "SYSTEM_NO_TS"
-
-    @staticmethod
-    def _timestamp_text(dt):
-        return dt.strftime("%Y%m%d_%H%M%S")
-
-    def _capture_day_dir(self, dt):
-        folder_name = (
-            TEST_DIR_NAME if self.event_type == "test" else DATA_DIR_NAME
-        )
-        path = self.root_dir / folder_name / dt.strftime("%Y%m%d")
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    def _manifest_path(self, dt):
-        day_dir = self.root_dir / SHEET_DIR_NAME / dt.strftime("%Y%m%d")
-        day_dir.mkdir(parents=True, exist_ok=True)
-        return day_dir / f"capture_manifest_{dt:%Y%m%d_%H00}.csv"
-
-    def _current_threshold(self):
-        value = self.current_threshold_getter()
-        return "" if value is None else value
-
     @staticmethod
     def _timestamp_manifest_fields(timestamp_info):
         ts = timestamp_info or {}
@@ -896,30 +788,7 @@ class ContinuousCaptureEngine:
                 flush=True,
             )
 
-    def request_stop(self):
-        self._stop_event.set()
-
-    def stop_receiver_and_drain(self):
-        self.request_stop()
-        if self._receiver_thread is not None:
-            self._receiver_thread.join(timeout=2.0)
-            if self._receiver_thread.is_alive():
-                raise RuntimeError("receiver thread did not stop")
-        self.stop_and_drain()
-
-    def stop_and_drain(self):
-        if self._closed:
-            return
-        self._submit_active("STOP")
-        self._save_queue.join()
-        self._save_queue.put(None)
-        self._save_queue.join()
-        if self._saver_thread is not None:
-            self._saver_thread.join(timeout=5.0)
-            if self._saver_thread.is_alive():
-                raise RuntimeError("saver thread did not stop")
-        self._closed = True
-
+ 
 
 class FPGAHostV6:
     def __init__(self):
