@@ -81,45 +81,8 @@ auto	自适应阈值触发模式，按周期（默认12h）依据背景噪声RMS
 安全时间	1h
 阈值幅值钳位	<=32760
 
-目录结构
-仓库遵循全国大学生嵌入式芯片与系统设计竞赛推荐的目录规范：
-<project_name>/
-|-- README.md                  # 项目简介 + 复现步骤（本文件）
-|-- src/                       # 设计源码
-|   |-- rtl/                   # FPGA RTL源码（ADC驱动、数据接收、滤波、特征提取、缓存传输等模块）
-|   |-- host/                  # 上位机Python源码（fpga_host_v6.py、waveform_processor_v1.py）
-|   |-- board/                 # 板级约束文件（XDC引脚约束、时钟约束、IO标准配置）
-|-- sim/                       # 仿真或验证脚本与结果
-|   |-- testbenches/           # RTL模块Testbench文件
-|   |-- results/               # 仿真波形与验证结果
-|-- build/                     # 可复现的构建脚本 + 综合与实现报告
-|   |-- scripts/               # FPGA编译脚本、上位机环境搭建脚本
-|   |-- reports/               # 综合报告、时序分析报告、资源利用率统计
-|-- board/                     # 上板工程、运行脚本与实测输出
-|   |-- scripts/               # 烧录脚本、启动脚本、模式切换脚本
-|   |-- mechanical/            # 机箱CAD设计图、散热设计说明
-|-- data/                      # 测试数据与参考结果
-|   |-- raw/                   # 实测采集数据样本（.bin文件）
-|   |-- reference/             # 参考波形数据（DDS信号发生器理论数据）
-|   |-- logs/                  # GPS时间戳记录、芯片温度日志
-|-- skill/                     # 技能包
-|   |-- README.md              # 技能包说明
-|   |-- adc_timing/            # AD9268高速ADC时序调试指南
-|   |-- zero_loss_verify/      # 2000万点数据零丢包传输验证流程
-|   |-- thermal_mgmt/          # FPGA野外部署散热优化清单
-|   |-- trigger_tuning/        # 雷电电场触发采集参数调优模板
-|   |-- ssh_ops/               # SSH远程运维快速排查手册
-|-- report/                    # 设计报告 + 大模型协作记录
-|   |-- design_report.md       # 设计报告全文
-|   |-- figures/               # 功能框图、架构图、性能对比图
-|   |-- collaboration/         # 大模型协作记录
-
 测试结果
 采集完整性测试
-在test模式下执行单次采集，约0.6s~2s内完成32000个数据包的接收。统计结果显示：CapturesWithLoss=0、DuplicatePackets=0、OrphanAdcPackets=0、BadPackets=0、BufferStarvation=0、SaveErrors=0，多次测试结果一致，实现零丢包。
-波形还原能力验证
-使用DDS信号发生器输出正弦波，采集所得波形周期完整、幅值对称，统计值为Min -16789、Max 16236、Mean -251.41（16位有符号），与输入信号一致，验证了系统的高速数据采集与波形还原能力。
-触发与瞬态捕捉
 在trigger模式下可连续完成触发采集，每次采集均带有GPS状态与时间戳。针对任意波突发事件，波形查看器可全览秒级瞬态波形，并标注峰值与持续时间，验证了系统对雷电瞬态事件的捕捉能力。
 状态记录
 每次采集均记录GPS授时定位状态与FPGA温度（36.4~43.4度），波形文件按站点代码与日期时间自动归档（data/sheet/test/YYYYMMDD/站点码+日期时间_序号.bin），便于事后追溯与分析。
